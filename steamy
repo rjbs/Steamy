@@ -1,6 +1,8 @@
 #!perl
 use rjbs;
 
+# This program was written for http://jfdi.club/ game-playing club.
+
 use Getopt::Long::Descriptive;
 use HTML::TreeBuilder;
 use JSON;
