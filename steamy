@@ -20,35 +20,6 @@ my $api_key = $opt->key;
 
 my %GAME_NAME;
 
-sub game_name {
-  my ($appid) = @_;
-
-  return $GAME_NAME{$appid} if $GAME_NAME{$appid};
-
-  my $info_uri = sprintf 'http://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=%s&appid=%s&format=json',
-    $api_key,
-    $appid;
-
-  my $json = $ua->get($info_uri)->decoded_content;
-  my $data = $JSON->decode($json);
-  return $GAME_NAME{$appid} = $data->{game}{gameName};
-}
-
-sub fallback_game_name {
-  my ($appid) = @_;
-
-  return $GAME_NAME{$appid} if $GAME_NAME{$appid};
-
-  my $store_uri = sprintf 'http://store.steampowered.com/app/%s/', $appid;
-
-  my $html = $ua->get($store_uri)->decoded_content;
-  my $tree = HTML::TreeBuilder->new_from_content($html);
-
-  my ($title) = $tree->look_down(_tag => 'title');
-
-  return $GAME_NAME{$appid} = $title->as_trimmed_text;
-}
-
 sub userslug_to_steamid {
   my ($userslug) = @_;
 
@@ -98,7 +69,7 @@ for my $userslug (@ARGV) {
 
 my @winners = grep { $candidate{$_} == @ARGV } keys %candidate;
 
-my %game_name = map {; $_ => fallback_game_name($_) // '(?)' } @winners;
+my %game_name = map {; $_ => $GAME_NAME{$_} // '(?)' } @winners;
 
 for my $game (sort { $game_name{$a} cmp $game_name{$b} } keys %game_name) {
   printf "%-6u - %s\n", $game, $game_name{$game};
