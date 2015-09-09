@@ -41,8 +41,10 @@ sub userslug_to_steamid {
 
   my @steam64 = $doc->getElementsByTagName('steamID64');
 
-  die "wtf too many" if @steam64 > 1;
-  die "wtf no ident" if @steam64 < 1;
+  die "This should never happen: got more than one Steam ID for $userslug"
+    if @steam64 > 1;
+
+  die "Couldn't find any Steam ID for $userslug" if @steam64 < 1;
 
   return $steam64[0]->textContent;
 }
