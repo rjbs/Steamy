@@ -1,0 +1,106 @@
+#!perl
+use rjbs;
+
+use Getopt::Long::Descriptive;
+use HTML::TreeBuilder;
+use JSON;
+use LWP::UserAgent;
+use XML::LibXML;
+
+my ($opt, $usage) = describe_options(
+  '%c %o',
+  [ 'time=i', 'playtime allowed before exclusion (min.)', { default => 10 } ],
+  [ 'key=s',  'Steam API key',           { default => $ENV{STEAM_API_KEY} } ],
+);
+
+my $JSON = JSON->new;
+my $ua   = LWP::UserAgent->new;
+
+my $api_key = $opt->key;
+
+my %GAME_NAME;
+
+sub game_name {
+  my ($appid) = @_;
+
+  return $GAME_NAME{$appid} if $GAME_NAME{$appid};
+
+  my $info_uri = sprintf 'http://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=%s&appid=%s&format=json',
+    $api_key,
+    $appid;
+
+  my $json = $ua->get($info_uri)->decoded_content;
+  my $data = $JSON->decode($json);
+  return $GAME_NAME{$appid} = $data->{game}{gameName};
+}
+
+sub fallback_game_name {
+  my ($appid) = @_;
+
+  return $GAME_NAME{$appid} if $GAME_NAME{$appid};
+
+  my $store_uri = sprintf 'http://store.steampowered.com/app/%s/', $appid;
+
+  my $html = $ua->get($store_uri)->decoded_content;
+  my $tree = HTML::TreeBuilder->new_from_content($html);
+
+  my ($title) = $tree->look_down(_tag => 'title');
+
+  return $GAME_NAME{$appid} = $title->as_trimmed_text;
+}
+
+sub userslug_to_steamid {
+  my ($userslug) = @_;
+
+  return $userslug if $userslug =~ /\A[0-9]+\z/;
+
+  my $uri = sprintf 'http://steamcommunity.com/id/%s/?xml=1', $userslug;
+
+  my $res = $ua->get($uri);
+
+  die "fail" unless $res->is_success;
+
+  open my $fh, '<', \$res->decoded_content(charset => 'none')
+    or die "error making handle to XML results: $!";
+
+  my $doc = XML::LibXML->load_xml(IO => $fh);
+
+  my @steam64 = $doc->getElementsByTagName('steamID64');
+
+  die "wtf too many" if @steam64 > 1;
+  die "wtf no ident" if @steam64 < 1;
+
+  return $steam64[0]->textContent;
+}
+
+my %candidate;
+
+for my $userslug (@ARGV) {
+  my $steamid = userslug_to_steamid($userslug);
+
+  printf "%s -> %s\n", $userslug, $steamid;
+
+  my $owned_uri = sprintf 'http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=%s&steamid=%s&format=json&include_appinfo=1',
+    $api_key,
+    $steamid;
+
+  my $json = $ua->get($owned_uri)->decoded_content;
+
+  my $data = $JSON->decode($json);
+
+  my @games = $data->{response}{games}->@*;
+  for my $game (@games) {
+    next if $game->{playtime_forever} > $opt->time;
+    $candidate{ $game->{appid} } ++;
+    $GAME_NAME{ $game->{appid} } = $game->{name};
+  }
+}
+
+my @winners = grep { $candidate{$_} == @ARGV } keys %candidate;
+
+my %game_name = map {; $_ => fallback_game_name($_) // '(?)' } @winners;
+
+for my $game (sort { $game_name{$a} cmp $game_name{$b} } keys %game_name) {
+  printf "%-6u - %s\n", $game, $game_name{$game};
+}
+
