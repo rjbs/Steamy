@@ -19,7 +19,7 @@ my $ua   = LWP::UserAgent->new;
 my $api_key = $opt->key;
 my @userslugs = @ARGV;
 
-my %GAME_NAME;
+my %GAME;
 
 sub userslug_to_steamid {
   my ($userslug) = @_;
@@ -45,8 +45,6 @@ sub userslug_to_steamid {
   return $steam64[0]->textContent;
 }
 
-my %candidate;
-
 for my $userslug (@userslugs) {
   my $steamid = userslug_to_steamid($userslug);
 
@@ -67,19 +65,25 @@ for my $userslug (@userslugs) {
 
   my @games = $data->{response}{games}->@*;
   for my $game (@games) {
-    next if $game->{playtime_forever} > $opt->time;
-    $candidate{ $game->{appid} } ++;
-    $GAME_NAME{ $game->{appid} } = $game->{name} // '(?)';
+    my $rec = ($GAME{ $game->{appid} } ||= { unplayers => 0 });
+    $rec->{name} = $game->{name} // '(?)';
+    $rec->{owners}++;
+    $rec->{unplayers}++ if $game->{playtime_forever} < $opt->time;
   }
 }
 
-my @app_ids = sort { $candidate{$b} <=> $candidate{$a}
-                  || $GAME_NAME{$a} cmp $GAME_NAME{$b} } keys %candidate;
+my @app_ids = sort { $GAME{$b}{unplayers} <=> $GAME{$a}{unplayers}
+                  || $GAME{$b}{owners}    <=> $GAME{$a}{owners}
+                  || $GAME{$a}{name} cmp $GAME{$b}{name} } keys %GAME;
 
 for my $appid (@app_ids) {
-  my $pct = int($candidate{$appid} / @userslugs * 100);
-  next unless $pct;
+  my $game = $GAME{$appid};
 
-  printf "%2i%% - %s (%s)\n", $pct, $GAME_NAME{$appid}, $appid;
+  my $u_pct = int($game->{unplayers} / @userslugs * 100);
+  next unless $u_pct;
+
+  my $o_pct = int($game->{owners} / @userslugs * 100);
+
+  printf "%2i%% / %2i%% - %s (%s)\n", $u_pct, $o_pct, $game->{name}, $appid;
 }
 
