@@ -25,7 +25,7 @@ sub userslug_to_steamid {
 
   return $userslug if $userslug =~ /\A[0-9]+\z/;
 
-  my $uri = sprintf 'http://steamcommunity.com/id/%s/?xml=1', $userslug;
+  my $uri = sprintf 'https://steamcommunity.com/id/%s/?xml=1', $userslug;
 
   my $res = $ua->get($uri);
 
@@ -51,7 +51,7 @@ for my $userslug (@ARGV) {
 
   printf "%s -> %s\n", $userslug, $steamid;
 
-  my $owned_uri = sprintf 'http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=%s&steamid=%s&format=json&include_appinfo=1',
+  my $owned_uri = sprintf 'https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=%s&steamid=%s&format=json&include_appinfo=1',
     $api_key,
     $steamid;
 
