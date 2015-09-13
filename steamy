@@ -23,6 +23,11 @@ my $ua   = LWP::UserAgent->new;
 my $api_key = $opt->key;
 my @userslugs = @ARGV;
 
+my %BLACKLISTED = (
+  340    => '"Half-Life 2: Lost Cost" is a tech demo',
+  223530 => '"Left 4 Dead 2 Beta" is a beta',
+);
+
 my %GAME;
 
 sub userslug_to_steamid {
@@ -71,6 +76,8 @@ for my $userslug (@userslugs) {
 
   my @games = $data->{response}{games}->@*;
   for my $game (@games) {
+    next if $BLACKLISTED{ $game->{appid} };
+
     my $rec = ($GAME{ $game->{appid} } ||= { unplayers => 0 });
     $rec->{name} = $game->{name} // '(?)';
     $rec->{owners}++;
