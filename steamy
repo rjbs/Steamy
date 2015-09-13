@@ -11,8 +11,9 @@ use XML::LibXML;
 
 my ($opt, $usage) = describe_options(
   '%c %o USERID...',
-  [ 'time=i', 'playtime allowed before exclusion (min.)', { default => 10 } ],
-  [ 'key=s',  'Steam API key',           { default => $ENV{STEAM_API_KEY} } ],
+  [ 'time=i',   'playtime allowed before exclusion (min.)', { default => 10 } ],
+  [ 'key=s',    'Steam API key',           { default => $ENV{STEAM_API_KEY} } ],
+  [ 'limit=i',  'stop listing after this many items', { default => 25 }       ],
 );
 
 $usage->die unless @ARGV;
@@ -81,22 +82,51 @@ for my $userslug (@userslugs) {
     my $rec = ($GAME{ $game->{appid} } ||= { unplayers => 0 });
     $rec->{name} = $game->{name} // '(?)';
     $rec->{owners}++;
-    $rec->{unplayers}++ if $game->{playtime_forever} < $opt->time;
+
+    if ($game->{playtime_forever} >= $opt->time) {
+      $rec->{players}++;
+    } else {
+      $rec->{unplayers}++;
+    }
   }
+}
+
+sub game_price ($appid) {
+  my $uri = sprintf 'http://store.steampowered.com/api/appdetails?appids=%s',
+    $appid;
+
+  my $res = $ua->get($uri);
+  return unless $res->is_success;
+
+  my $data = $JSON->decode($res->decoded_content);
+
+  return unless my $price_data = $data->{$appid}{data}{price_overview};
+  return unless $price_data->{currency} eq 'USD';
+  return unless defined $price_data->{final};
+  return $price_data->{final} / 100;
 }
 
 my @app_ids = sort { $GAME{$b}{unplayers} <=> $GAME{$a}{unplayers}
                   || $GAME{$b}{owners}    <=> $GAME{$a}{owners}
                   || $GAME{$a}{name} cmp $GAME{$b}{name} } keys %GAME;
 
+$#app_ids = $opt->limit - 1 if $opt->limit and @app_ids > $opt->limit;
+
 for my $appid (@app_ids) {
   my $game = $GAME{$appid};
 
-  my $u_pct = int($game->{unplayers} / @userslugs * 100);
-  next unless $u_pct;
+  # my $u_pct = int($game->{unplayers} / @userslugs * 100);
+  # my $o_pct = int($game->{owners} / @userslugs * 100);
+  # printf "%2i%% / %2i%% - %s (%s)\n", $u_pct, $o_pct, $game->{name}, $appid;
 
-  my $o_pct = int($game->{owners} / @userslugs * 100);
+  my $unowners = @userslugs - ($game->{owners} // 0);
 
-  printf "%2i%% / %2i%% - %s (%s)\n", $u_pct, $o_pct, $game->{name}, $appid;
+  printf " %2i | %2i |  %2i | \$%4.0f | %s (%s)\n",
+    $game->{unplayers} + $unowners, # everyone who has not played the game
+    $unowners,                      # people who would have to buy the game
+    $game->{players} // 0,          # owned it, played it
+    game_price($appid) // -1,
+    $game->{name},
+    $appid;
 }
 
