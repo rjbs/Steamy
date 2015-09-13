@@ -10,10 +10,12 @@ use LWP::UserAgent;
 use XML::LibXML;
 
 my ($opt, $usage) = describe_options(
-  '%c %o',
+  '%c %o USERID...',
   [ 'time=i', 'playtime allowed before exclusion (min.)', { default => 10 } ],
   [ 'key=s',  'Steam API key',           { default => $ENV{STEAM_API_KEY} } ],
 );
+
+$usage->die unless @ARGV;
 
 my $JSON = JSON->new;
 my $ua   = LWP::UserAgent->new;
