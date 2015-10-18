@@ -8,15 +8,34 @@ use HTML::TreeBuilder;
 use JSON;
 use LWP::UserAgent;
 use XML::LibXML;
+use CHI;
 
 my ($opt, $usage) = describe_options(
   '%c %o USERID...',
   [ 'time=i',   'playtime allowed before exclusion (min.)', { default => 10 } ],
   [ 'key=s',    'Steam API key',           { default => $ENV{STEAM_API_KEY} } ],
   [ 'limit=i',  'stop listing after this many items', { default => 25 }       ],
+  [ 'cache-duration=s',  'Duration for new items in cache (default is "6 hours")', { default => '6 hours' }       ],
 );
 
 $usage->die unless @ARGV;
+
+my $cache = CHI->new(
+  driver => 'File',
+  root_dir => "$ENV{HOME}/.steamy-cache"
+);
+
+my $cached_get = sub {
+  my ($ua, $uri) = @_;
+
+  if (my $ret = $cache->get($uri)) {
+    return $ret
+  } else {
+    my $response = $ua->get($uri);
+    $cache->set($uri, $response, $opt->cache_duration) if $response->is_success;
+    return $response
+  }
+};
 
 my $JSON = JSON->new;
 my $ua   = LWP::UserAgent->new;
@@ -38,7 +57,7 @@ sub userslug_to_steamid {
 
   my $uri = sprintf 'https://steamcommunity.com/id/%s/?xml=1', $userslug;
 
-  my $res = $ua->get($uri);
+  my $res = $ua->$cached_get($uri);
 
   die "fail" unless $res->is_success;
 
@@ -66,7 +85,7 @@ for my $userslug (@userslugs) {
     $api_key,
     $steamid;
 
-  my $json = $ua->get($owned_uri)->decoded_content;
+  my $json = $ua->$cached_get($owned_uri)->decoded_content;
 
   my $data = $JSON->decode($json);
 
@@ -95,7 +114,7 @@ sub game_price ($appid) {
   my $uri = sprintf 'http://store.steampowered.com/api/appdetails?appids=%s',
     $appid;
 
-  my $res = $ua->get($uri);
+  my $res = $ua->$cached_get($uri);
   return unless $res->is_success;
 
   my $data = $JSON->decode($res->decoded_content);
