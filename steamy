@@ -1,4 +1,12 @@
 #!perl
+use utf8;
+use strict;
+use autodie;
+use warnings;
+use warnings    qw< FATAL  utf8     >;
+use open        qw< :std  :utf8     >;
+use charnames   qw< :full >;
+use feature     qw< unicode_strings >;
 use rjbs;
 
 # This program was written for http://jfdi.club/ game-playing club.
@@ -43,6 +51,8 @@ my $ua   = LWP::UserAgent->new;
 my $api_key = $opt->key;
 my @userslugs = @ARGV;
 
+binmode(STDOUT, ":encoding(UTF-8)");
+
 my %BLACKLISTED = (
   340    => '"Half-Life 2: Lost Cost" is a tech demo',
   223530 => '"Left 4 Dead 2 Beta" is a beta',
@@ -61,7 +71,7 @@ sub userslug_to_steamid {
 
   die "fail" unless $res->is_success;
 
-  open my $fh, '<', \$res->decoded_content(charset => 'none')
+  open my $fh, '<:raw', \$res->decoded_content(charset => 'none')
     or die "error making handle to XML results: $!";
 
   my $doc = XML::LibXML->load_xml(IO => $fh);
@@ -125,6 +135,25 @@ sub game_price ($appid) {
   return $price_data->{final} / 100;
 }
 
+sub game_os ($appid) {
+  my $uri = sprintf 'http://store.steampowered.com/api/appdetails?appids=%s',
+    $appid;
+
+  my $res = $ua->$cached_get($uri);
+  return unless $res->is_success;
+
+  my $data = $JSON->decode($res->decoded_content);
+
+  my $p = $data->{$appid}{data}{platforms};
+  my $ret = '';
+
+  $ret .= $p->{windows} ? " \N{DESKTOP WINDOW} " : '   ';
+  $ret .= $p->{mac}     ? " \N{GREEN APPLE} "    : '   ';
+  $ret .= $p->{linux}   ? " \N{PENGUIN} "        : '   ';
+
+  $ret
+}
+
 my @app_ids = sort { $GAME{$b}{unplayers} <=> $GAME{$a}{unplayers}
                   || $GAME{$b}{owners}    <=> $GAME{$a}{owners}
                   || $GAME{$a}{name} cmp $GAME{$b}{name} } keys %GAME;
@@ -140,11 +169,12 @@ for my $appid (@app_ids) {
 
   my $unowners = @userslugs - ($game->{owners} // 0);
 
-  printf " %2i | %2i |  %2i | \$%4.0f | %s (%s)\n",
+  printf " %2i | %2i |  %2i | \$%4.0f | % 9s | %s (%s)\n",
     $game->{unplayers} + $unowners, # everyone who has not played the game
     $unowners,                      # people who would have to buy the game
     $game->{players} // 0,          # owned it, played it
     game_price($appid) // -1,
+    game_os($appid) // '',
     $game->{name},
     $appid;
 }
