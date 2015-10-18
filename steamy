@@ -17,6 +17,7 @@ use JSON;
 use LWP::UserAgent;
 use XML::LibXML;
 use CHI;
+use Encode;
 
 my ($opt, $usage) = describe_options(
   '%c %o USERID...',
@@ -175,7 +176,7 @@ for my $appid (@app_ids) {
     $game->{players} // 0,          # owned it, played it
     game_price($appid) // -1,
     game_os($appid) // '',
-    $game->{name},
+    decode('UTF-8', $game->{name}),
     $appid;
 }
 
