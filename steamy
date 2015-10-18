@@ -25,6 +25,9 @@ my ($opt, $usage) = describe_options(
   [ 'key=s',    'Steam API key',           { default => $ENV{STEAM_API_KEY} } ],
   [ 'limit=i',  'stop listing after this many items', { default => 25 }       ],
   [ 'cache-duration=s',  'Duration for new items in cache (default is "6 hours")', { default => '6 hours' }       ],
+  [ 'linux',   'Require linux support',                                       ],
+  [ 'mac',     'Require mac support',                                         ],
+  [ 'windows', 'Require windows support',                                     ],
 );
 
 $usage->die unless @ARGV;
@@ -148,6 +151,12 @@ sub game_os ($appid) {
   my $p = $data->{$appid}{data}{platforms};
   my $ret = '';
 
+  # I am a monster
+  no warnings;
+  next GAME if $opt->linux && !$p->{linux};
+  next GAME if $opt->mac && !$p->{mac};
+  next GAME if $opt->windows && !$p->{windows};
+
   $ret .= $p->{windows} ? " \N{DESKTOP WINDOW} " : '   ';
   $ret .= $p->{mac}     ? " \N{GREEN APPLE} "    : '   ';
   $ret .= $p->{linux}   ? " \N{PENGUIN} "        : '   ';
@@ -161,6 +170,7 @@ my @app_ids = sort { $GAME{$b}{unplayers} <=> $GAME{$a}{unplayers}
 
 $#app_ids = $opt->limit - 1 if $opt->limit and @app_ids > $opt->limit;
 
+GAME:
 for my $appid (@app_ids) {
   my $game = $GAME{$appid};
 
