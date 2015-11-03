@@ -28,6 +28,7 @@ my ($opt, $usage) = describe_options(
   [ 'linux',   'Require linux support',                                       ],
   [ 'mac',     'Require mac support',                                         ],
   [ 'windows', 'Require windows support',                                     ],
+  [ 'price!',   'fetch price data', { default => 1 } ],
 );
 
 $usage->die unless @ARGV;
@@ -125,6 +126,8 @@ for my $userslug (@userslugs) {
 }
 
 sub game_price ($appid) {
+  return unless $opt->price;
+
   my $uri = sprintf 'http://store.steampowered.com/api/appdetails?appids=%s',
     $appid;
 
