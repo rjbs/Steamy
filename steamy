@@ -7,7 +7,10 @@ use warnings    qw< FATAL  utf8     >;
 use open        qw< :std  :utf8     >;
 use charnames   qw< :full >;
 use feature     qw< unicode_strings >;
-use rjbs;
+use 5.22.0;
+use warnings;
+
+use experimental 'postderef', 'signatures';
 
 # This program was written for http://jfdi.club/ game-playing club.
 
