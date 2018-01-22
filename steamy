@@ -120,6 +120,7 @@ for my $userslug (@userslugs) {
     $rec->{name} = $game->{name} // '(?)';
     $rec->{owners}++;
 
+    warn "adding $rec->{name}\n";
     if ($game->{playtime_forever} >= $opt->time) {
       $rec->{players}++;
     } else {
@@ -163,18 +164,32 @@ sub game_os ($appid) {
   next GAME if $opt->mac && !$p->{mac};
   next GAME if $opt->windows && !$p->{windows};
 
-  $ret .= $p->{windows} ? " \N{DESKTOP WINDOW} " : '   ';
   $ret .= $p->{mac}     ? " \N{GREEN APPLE} "    : '   ';
   $ret .= $p->{linux}   ? " \N{PENGUIN} "        : '   ';
+  $ret .= $p->{windows} ? " \N{NEGATIVE SQUARED LATIN CAPITAL LETTER W} "
+                        : '   ';
 
   $ret
+}
+
+sub game_tags ($appid) {
+  my $uri = sprintf 'http://store.steampowered.com/app/%s/Steamy/',
+    $appid;
+
+  my $res = $ua->$cached_get($uri);
+
+  use HTML::TreeBuilder;
+  my $root = HTML::TreeBuilder->new_from_content($res->decoded_content);
+  my @tags = map {; $_->as_text } $root->look_down(class => 'app_tag');
+  s/^\s+//, s/\s+$// for @tags;
+  return @tags;
 }
 
 my @app_ids = sort { $GAME{$b}{unplayers} <=> $GAME{$a}{unplayers}
                   || $GAME{$b}{owners}    <=> $GAME{$a}{owners}
                   || $GAME{$a}{name} cmp $GAME{$b}{name} } keys %GAME;
 
-$#app_ids = $opt->limit - 1 if $opt->limit and @app_ids > $opt->limit;
+# $#app_ids = $opt->limit - 1 if $opt->limit and @app_ids > $opt->limit;
 
 GAME:
 for my $appid (@app_ids) {
@@ -185,6 +200,9 @@ for my $appid (@app_ids) {
   # printf "%2i%% / %2i%% - %s (%s)\n", $u_pct, $o_pct, $game->{name}, $appid;
 
   my $unowners = @userslugs - ($game->{owners} // 0);
+
+  my @tags = game_tags($appid);
+  do { next } unless grep {; $_ eq 'Multiplayer' } @tags;
 
   printf " %2i | %2i |  %2i | \$%4.0f | % 9s | %s (%s)\n",
     $game->{unplayers} + $unowners, # everyone who has not played the game
